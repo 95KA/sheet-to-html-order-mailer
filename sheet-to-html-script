@@ -1,0 +1,197 @@
+//script dates back to 2021/2022
+//script gets order data, writes it as html body which is then sent via e-mail
+//recipient is a fulfiller who needs order data as an e-mail packing list
+
+function myFunction() {
+  
+// get order data from sheet that was populated by zapier hook
+
+  var sheet = SpreadsheetApp.openByUrl('MY_SPREADSHEET_URL').getActiveSheet();
+  var numRows = sheet.getLastRow();
+  var dataRange = sheet.getRange(1,1,numRows,1);
+  var dataAry = dataRange.getValues();
+
+// set data columns and format for later injections
+
+  var columnNameAry = ["Order Datum;Order Nr;Kunde;Artikel;Menge;Tags"]
+  var blankAry = ["⠀;⠀;⠀;⠀;⠀;⠀"]
+
+  columnNameAry = columnNameAry[0].split(";")
+  blankAry = blankAry[0].split(";")
+
+// split row array content into colum arrays 
+
+  for (i in dataAry) {
+      dataAry[i] = dataAry[i][0].split(";")
+  }
+
+// split articles string and related quantity string into array 
+    for (i in dataAry) {
+      dataAry[i][3] = dataAry[i][3].split(",")
+      dataAry[i][4] = dataAry[i][4].split(",")
+  }
+
+// column index list
+  /*
+    [
+      0 = date string
+      1 = order nr string
+      2 = customer name string
+      3 = all article names in one array
+      4 = all artice quantities array
+      5 = all order tags (in one, comma seperated, string)
+    ]
+  */
+
+var dataAryLength = dataAry.length
+
+// create Array for additional rows to be added
+var extraRowAry = new Array();
+
+// iterate all rows in dataAry
+for  (var rowIndex = 0; rowIndex <= (dataAryLength - 1); rowIndex = rowIndex + 1) {
+
+  var orderDate = dataAry[rowIndex][0];
+  var orderNr = dataAry[rowIndex][1];
+  var articleAry = dataAry[rowIndex][3];
+  var articleAmount = dataAry[rowIndex][3].length;
+  var quantityAry = dataAry[rowIndex][4];
+  var quantityAmount = dataAry[rowIndex][4].length;
+
+  // format date string
+    var onlyDate = dataAry[rowIndex][0].substring(0,10)
+    var onlyYear = onlyDate.substring(0,4)
+    var onlyMonth = onlyDate.substring(5,7)
+    var onlyDay = onlyDate.substring(8,10)
+
+    dataAry[rowIndex][0] = onlyDay + "." + onlyMonth + "." + onlyYear
+
+  // create new row for each additional article per order
+  while (articleAmount != 1.0) {
+
+    newAry = new Array;
+    
+    var rowLength = dataAry[rowIndex].length;
+    var lengthCount = 0;
+    
+    // fill new row with identifying order number or empty string
+    while (lengthCount < rowLength) {
+      if (lengthCount == 1) {
+        newAry.push(orderNr)
+      } else {
+        newAry.push("⠀")
+      }
+      lengthCount += 1;
+    }
+
+    // transfer each additional article to destination cell in new row
+    newAry.splice(3,1,dataAry[rowIndex][3].pop())
+    articleAmount -= 1;
+
+    // transfer each additional quantity value to destination cell in new row
+    newAry.splice(4,1,dataAry[rowIndex][4].pop())
+    quantityAmount -= 1;
+
+    // inject newAry into extraRowAry
+    var extraRowAryLength = extraRowAry.length
+    extraRowAry.splice(extraRowAryLength,0,newAry)
+  }
+}
+
+// remove unnecessary array dimension in article column and quantity column of dataAry
+for (e in dataAry) {
+  dataAry[e][3] = dataAry[e][3][0];
+  dataAry[e][4] = dataAry[e][4][0];
+}
+
+// inject extraRowAry into dataAry
+for (e in extraRowAry) {
+
+    var extraOrderNumber = extraRowAry[e][1];
+    var dataAryRowIndex = 0;
+    var destinationRowNumber = null;
+
+    for (i in dataAry) {
+
+      var dataOrderNumber = dataAry[i][1];
+
+      if (dataOrderNumber == extraOrderNumber) {
+        destinationRowNumber = dataAryRowIndex
+      }
+      dataAryRowIndex += 1;
+    }
+    dataAry.splice((destinationRowNumber + 1), 0, extraRowAry[e])
+}
+
+// remove now unnecessary identifying orderNums from extraRows
+for (e in dataAry) {
+  if (dataAry[e][0] == "⠀") {
+    dataAry[e][1] = "⠀";
+  }
+}
+
+// Logger.log(dataAry);
+
+
+// filter rows by tag
+
+//var toBeRemovedAry = new Array();
+
+for  (var rowIndex = 0; rowIndex <= (dataAry.length - 1); rowIndex = rowIndex + 1) {
+  
+  //remove pre-orders
+  var preOrderTagRegEx = /pre-order/
+
+  if (preOrderTagRegEx.test(dataAry[rowIndex][5])) {
+      dataAry.splice(dataAry[rowIndex],1);
+      rowIndex = rowIndex - 1
+  }
+}
+
+//Logger.log(dataAry);
+
+// inject columnNameAry and blankAry into dataAry
+dataAry.unshift(blankAry)
+dataAry.unshift(columnNameAry)
+
+// turn dataAry into HTML string
+var myHtmlDataString = toHTMLTable(dataAry)
+
+function toHTMLTable(a) {
+  var content = a.map(function(row, i) {
+    var rowHTML = row.map(function (col) {
+      return "<td>" + col + "</td>";
+    }).join("");
+
+    return "<tr>" + rowHTML + "</tr>";
+  }).join("");
+  return "<table>" + content + "</table>";
+}
+
+// get date in mail header
+var millisPerDay = 1000 * 60 * 60 * 24;
+var dateNow = new Date()
+var dateYesterday = Utilities.formatDate(new Date(dateNow.getTime() - millisPerDay), "GMT+1", "dd.MM.yyyy");
+
+// send mail
+var emailAddress1 = "SENDER_E-MAIL-ADRESS"
+var emailAddress2 = "MY_E-MAIL-ADRESS_FOR_TESTING"
+var emailAddress3 = "TARGET_E-MAIL-ADRESS"
+
+var subject1 = "LITTLE ASHÉ Orders " + "[" + dateYesterday + "]"
+var message1 = "Hallo"
+
+MailApp.sendEmail(emailAddress2, subject1, message1, {
+    htmlBody: myHtmlDataString
+});
+
+/*
+MailApp.sendEmail(emailAddress1, subject1, message1, {
+    htmlBody: myHtmlDataString
+});
+*/
+
+// delete sent rows
+sheet.deleteRows(1, numRows);
+
+}
