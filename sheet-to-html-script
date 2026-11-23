@@ -1,10 +1,12 @@
 //script dates back to 2021/2022
+//Google Apps Script is a javascript library with integrated Google Services functionality
+//script is executed by Google Apps Script at 07:30 AM daily
 //script gets order data, writes it as html body which is then sent via e-mail
 //recipient is a fulfiller who needs order data as an e-mail packing list
 
 function myFunction() {
   
-// get order data from sheet that was populated by zapier hook
+// get order data from Google sheet that was populated by zapier hook
 
   var sheet = SpreadsheetApp.openByUrl('MY_SPREADSHEET_URL').getActiveSheet();
   var numRows = sheet.getLastRow();
